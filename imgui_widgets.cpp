@@ -5432,6 +5432,12 @@ bool ImGui::ColorPicker4(const char* label, float col[4], ImGuiColorEditFlags fl
 
     float H = col[0], S = col[1], V = col[2];
     float R = col[0], G = col[1], B = col[2];
+
+    //Kelvin-based Color Temperatures  (1k,3k,5k,7k,9k,11k)
+    const int style_alpha8 = IM_F32_TO_INT8_SAT(style.Alpha);
+    const ImU32 col_temps[6] = { IM_COL32(255,56,0,style_alpha8), IM_COL32(255,180,107,style_alpha8), IM_COL32(255,228,206,style_alpha8), IM_COL32(245,243,255,style_alpha8), IM_COL32(214,225,255,style_alpha8), IM_COL32(200,213,255,style_alpha8) };
+
+
     if (flags & ImGuiColorEditFlags_InputRGB)
     {
         // Hue is lost when converting from grayscale rgb (saturation=0). Restore it.
@@ -5502,6 +5508,39 @@ bool ImGui::ColorPicker4(const char* label, float col[4], ImGuiColorEditFlags fl
         {
             H = ImSaturate((io.MousePos.y - picker_pos.y) / (sv_picker_size - 1));
             value_changed = value_changed_h = true;
+        }
+    }
+    else if (flags & ImGuiColorEditFlags_PickerTempsBar)
+    {
+        // Temperature bar logic
+        SetCursorScreenPos(ImVec2(bar0_pos_x, picker_pos.y));
+        InvisibleButton("temperature", ImVec2(bars_width, sv_picker_size));
+        static float prcnt = 0.5;
+        if (IsItemActive())
+        {
+            //interpolate color between previous and next values in temps array based on the float index
+            prcnt = ImSaturate((io.MousePos.y - picker_pos.y) / (sv_picker_size - 1)); // 0.01 --> 1.0 range
+            float scaled_prcnt = prcnt * 5.f; //N, gets us close to a reasonable index value
+            int index = floor(scaled_prcnt);
+            float t_val = scaled_prcnt - floor(scaled_prcnt); //remainder we need to lerp to
+
+            ImColor unpacked_color(col_temps[index]);
+
+            if(t_val < 0.001) //no interpolation needed, probably at an endpoint
+            {
+                 ColorConvertRGBtoHSV(unpacked_color.Value.x, unpacked_color.Value.y, unpacked_color.Value.z, col[0], col[1], col[2]);
+            }
+            else
+            {
+                ImColor next_unpacked_color(col_temps[index+1]);
+                ImVec4 lerp_color = ImLerp(unpacked_color.Value, next_unpacked_color.Value, t_val);
+                ColorConvertRGBtoHSV(lerp_color.x, lerp_color.y, lerp_color.z, col[0], col[1], col[2]);
+            }
+
+            H = col[0];
+            S = col[1];
+            V = col[2];
+            value_changed = value_changed_h = value_changed_sv = true;
         }
     }
 
@@ -5632,7 +5671,7 @@ bool ImGui::ColorPicker4(const char* label, float col[4], ImGuiColorEditFlags fl
         }
     }
 
-    const int style_alpha8 = IM_F32_TO_INT8_SAT(style.Alpha);
+   
     const ImU32 col_black = IM_COL32(0,0,0,style_alpha8);
     const ImU32 col_white = IM_COL32(255,255,255,style_alpha8);
     const ImU32 col_midgrey = IM_COL32(128,128,128,style_alpha8);
@@ -5699,6 +5738,22 @@ bool ImGui::ColorPicker4(const char* label, float col[4], ImGuiColorEditFlags fl
         for (int i = 0; i < 6; ++i)
             draw_list->AddRectFilledMultiColor(ImVec2(bar0_pos_x, picker_pos.y + i * (sv_picker_size / 6)), ImVec2(bar0_pos_x + bars_width, picker_pos.y + (i + 1) * (sv_picker_size / 6)), col_hues[i], col_hues[i], col_hues[i + 1], col_hues[i + 1]);
         float bar0_line_y = IM_ROUND(picker_pos.y + H * sv_picker_size);
+        RenderFrameBorder(ImVec2(bar0_pos_x, picker_pos.y), ImVec2(bar0_pos_x + bars_width, picker_pos.y + sv_picker_size), 0.0f);
+        RenderArrowsForVerticalBar(draw_list, ImVec2(bar0_pos_x - 1, bar0_line_y), ImVec2(bars_triangles_half_sz + 1, bars_triangles_half_sz), bars_width + 2.0f, style.Alpha);
+    }
+    else if (flags & ImGuiColorEditFlags_PickerTempsBar)
+    {
+        // Render Temps Bar
+        for (int i = 0; i < 5; ++i)
+            draw_list->AddRectFilledMultiColor(ImVec2(bar0_pos_x, picker_pos.y + i * (sv_picker_size / 5)), ImVec2(bar0_pos_x + bars_width, picker_pos.y + (i + 1) * (sv_picker_size / 5)), col_temps[i], col_temps[i], col_temps[i + 1], col_temps[i + 1]);
+
+        static float bar0_line_y = picker_pos.y;
+        if (IsItemActive())
+        {
+          bar0_line_y  = IM_ROUND(picker_pos.y + (ImSaturate((io.MousePos.y - picker_pos.y) / (sv_picker_size - 1))) * sv_picker_size);
+        }
+
+
         RenderFrameBorder(ImVec2(bar0_pos_x, picker_pos.y), ImVec2(bar0_pos_x + bars_width, picker_pos.y + sv_picker_size), 0.0f);
         RenderArrowsForVerticalBar(draw_list, ImVec2(bar0_pos_x - 1, bar0_line_y), ImVec2(bars_triangles_half_sz + 1, bars_triangles_half_sz), bars_width + 2.0f, style.Alpha);
     }
