@@ -765,13 +765,22 @@ void ImGui_ImplGlfw_NewFrame()
     IM_ASSERT(bd != nullptr && "Did you call ImGui_ImplGlfw_InitForXXX()?");
 
     // Setup display size (every frame to accommodate for window resizing)
+    ImVec2 fb_scale = {1.0f, 1.0f};
     int w, h;
-    int display_w, display_h;
+    int fb_w, fb_h;
     glfwGetWindowSize(bd->Window, &w, &h);
-    glfwGetFramebufferSize(bd->Window, &display_w, &display_h);
-    io.DisplaySize = ImVec2((float)w, (float)h);
-    if (w > 0 && h > 0)
-        io.DisplayFramebufferScale = ImVec2((float)display_w / (float)w, (float)display_h / (float)h);
+    if(w <= 0 || h <=0)
+        return;
+
+   //Window Size is equal to Framebuffer size on Windows, but not necessarily on others
+    glfwGetFramebufferSize(bd->Window, &fb_w, &fb_h);
+    if (w != fb_w || h != fb_h)
+    {
+        fb_scale = ImVec2((float)fb_w / (float)w, (float)fb_h / (float)h);
+    }
+
+    io.DisplayFramebufferScale = fb_scale;
+    io.DisplaySize = ImVec2((float)fb_w, (float)fb_h);
 
     // Setup time step
     // (Accept glfwGetTime() not returning a monotonically increasing value. Seems to happens on disconnecting peripherals and probably on VMs and Emscripten, see #6491, #6189, #6114, #3644)
